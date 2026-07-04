@@ -80,12 +80,12 @@ install_system_deps() {
 }
 
 # ── 1. System dependencies ──────────────────────────
-echo "[1/5] Installing system dependencies..."
+echo "[1/7] Installing system dependencies..."
 install_system_deps
 echo ""
 
 # ── 2. Node.js ──────────────────────────────────────
-echo "[2/5] Checking Node.js..."
+echo "[2/7] Checking Node.js..."
 if command -v node &>/dev/null && [ "$(node -v | cut -d. -f1 | tr -d v)" -ge 18 ]; then
   echo "  Node.js $(node -v) already installed"
 elif [ "$TERMUX" = 1 ]; then
@@ -103,7 +103,7 @@ fi
 echo ""
 
 # ── 3. Clone repo ───────────────────────────────────
-echo "[3/5] Setting up VPLink 3.0..."
+echo "[3/7] Setting up VPLink 3.0..."
 if [ -d "$DIR" ]; then
   echo "  Updating existing installation..."
   cd "$DIR" && git pull
@@ -114,8 +114,26 @@ fi
 cd "$DIR"
 echo ""
 
-# ── 4. Install npm dependencies & Playwright ────────
-echo "[4/5] Installing Playwright + browsers..."
+# ── 4. Clone proxy-hunter repo ──────────────────────
+echo "[4/7] Installing proxy hunter..."
+HUNTER_DIR="$HOME/vplink-proxy-hunter"
+if [ -d "$HUNTER_DIR" ]; then
+  echo "  Proxy hunter already exists at $HUNTER_DIR"
+else
+  echo "  Cloning vplink-proxy-hunter..."
+  git clone --depth 1 https://github.com/adittaya/vplink-proxy-hunter.git "$HUNTER_DIR"
+fi
+echo ""
+
+# ── 5. Install Python dependencies ──────────────────
+echo "[5/7] Installing Python dependencies..."
+if command -v pip3 &>/dev/null; then
+  pip3 install supabase httpx -q 2>/dev/null || true
+fi
+echo ""
+
+# ── 6. Install npm dependencies & Playwright ────────
+echo "[6/7] Installing Playwright + browsers..."
 if [ "$TERMUX" = 1 ]; then
   # Termux: use playwright-core + system Chromium
   npm install playwright-core 2>&1 | tail -2
@@ -126,8 +144,9 @@ else
 fi
 echo ""
 
-# ── 5. Install command ─────────────────────────────
-echo "[5/5] Installing vplink3.0 command..."
+# ── 7. Install command ─────────────────────────────
+echo "[7/7] Installing vplink3.0 command..."
+chmod +x "$DIR/proxy_manager.py"
 if [ "$TERMUX" = 1 ]; then
   cp "$DIR/vplink3.0.sh" "$PREFIX/bin/vplink3.0"
   chmod +x "$PREFIX/bin/vplink3.0"

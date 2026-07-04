@@ -41,9 +41,12 @@ process.on('SIGINT', async () => {
     launchOpts.headless = false;
   }
   browser = await chromium.launch(launchOpts);
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 720 },
-  });
+  const ctxOpts = { viewport: { width: 1280, height: 720 } };
+  if (process.env.VPLINK_PROXY) {
+    ctxOpts.proxy = { server: process.env.VPLINK_PROXY };
+    console.log(`  Proxy: ${process.env.VPLINK_PROXY}`);
+  }
+  const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
 
   let destinationUrl = null;
@@ -280,7 +283,8 @@ process.on('SIGINT', async () => {
   console.log('\n═════════════════════════════════════════');
   console.log('  ✅ DESTINATION URL:');
   console.log('  ' + destinationUrl);
-  fs.writeFileSync('/root/recording_20260703_191656/destination_url.txt', destinationUrl);
+  const outDir = process.env.VPLINK_DIR || __dirname;
+  fs.writeFileSync(outDir + '/destination_url.txt', destinationUrl);
   await ms(5000);
   await browser.close();
 })();

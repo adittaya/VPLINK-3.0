@@ -40,14 +40,25 @@ if [ "$TERMUX" = 0 ]; then
   read -p "VNC viewer needed? (y/N): " VNC_NEEDED
 fi
 
+# ── Ask for proxy rotation ─────────────────────────────
+PROXY_MANAGER="$SCRIPT_DIR/proxy_manager.py"
+ROTATE_PROXY="n"
+read -p "Rotate IP via proxy each view? (Y/n): " ROTATE_PROXY
+
 echo ""
 echo "Starting $VIEWS view(s) with key: $KEY"
 [ "$TERMUX" = 1 ] && echo "Termux mode: headless Chromium, no display server"
 [ "$VNC_NEEDED" = "y" ] || [ "$VNC_NEEDED" = "Y" ] && echo "VNC on port 5900" || echo "VNC disabled"
+if [ "$ROTATE_PROXY" = "y" ] || [ "$ROTATE_PROXY" = "Y" ] || [ -z "$ROTATE_PROXY" ]; then
+  ROTATE_PROXY="y"
+  echo "Proxy rotation: enabled"
+  export PROXY_HUNTER_DIR="$HOME/vplink-proxy-hunter"
+fi
 echo ""
 
 export NODE_PATH="$SCRIPT_DIR/node_modules"
 export VPLINK_TERMUX="$TERMUX"
+export VPLINK_DIR="$SCRIPT_DIR"
 
 for (( i=1; i<=$VIEWS; i++ )); do
   echo "══════════════════════════════════════════════"
@@ -56,6 +67,19 @@ for (( i=1; i<=$VIEWS; i++ )); do
 
   cleanup
   sleep 2
+
+  if [ "$ROTATE_PROXY" = "y" ]; then
+    echo ""
+    echo "  → Getting proxy for view $i..."
+    PROXY_URL=$(python3 "$PROXY_MANAGER" --next 2>&1)
+    if echo "$PROXY_URL" | grep -q "://"; then
+      export VPLINK_PROXY="$PROXY_URL"
+      echo "  ✅ Proxy: $VPLINK_PROXY"
+    else
+      echo "  ⚠ No proxy available, running direct"
+      unset VPLINK_PROXY
+    fi
+  fi
 
   if [ "$TERMUX" = 0 ]; then
     # Standard Linux: start display server
@@ -79,6 +103,11 @@ for (( i=1; i<=$VIEWS; i++ )); do
   cd "$SCRIPT_DIR"
   timeout 480 node "$AUTOMATION" "$KEY"
   EXIT_CODE=$?
+
+  # Mark proxy as used so next view gets a different IP
+  if [ "$ROTATE_PROXY" = "y" ] && [ -n "$VPLINK_PROXY" ]; then
+    python3 "$PROXY_MANAGER" --mark-used "$VPLINK_PROXY" 2>/dev/null || true
+  fi
 
   if [ -f "$SCRIPT_DIR/destination_url.txt" ]; then
     DEST=$(cat "$SCRIPT_DIR/destination_url.txt")

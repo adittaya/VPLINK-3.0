@@ -68,11 +68,9 @@ jobs:
           ls node_modules/playwright-core/package.json > /dev/null && echo "playwright-core OK"
 
           echo "=== Test automation JS with VPLINK_TERMUX=1 (dry-run) ==="
-          # Just parse to verify the Termux branch in JS doesn't have syntax errors
           node -e "
             const fs = require('fs');
             const code = fs.readFileSync('$HOME/vplink3.0/generated_automation.js', 'utf8');
-            // Check both launch paths exist
             if (code.includes('isTermux') && code.includes('executablePath') && code.includes('no-sandbox')) {
               console.log('Termux branch present: OK');
             } else {
@@ -83,7 +81,25 @@ jobs:
 
       - name: Test Termux launcher paths
         run: |
-          echo "=== Test vplink3.0.sh detects Termux env ==="
           grep -q "TERMUX" "$HOME/vplink3.0/vplink3.0.sh" && echo "Termux detection in launcher: OK"
           grep -q "VPLINK_TERMUX" "$HOME/vplink3.0/vplink3.0.sh" && echo "VPLINK_TERMUX env var: OK"
           grep -q "chromium-browser" "$HOME/vplink3.0/generated_automation.js" && echo "Chromium path in JS: OK"
+
+      - name: Test proxy manager
+        run: |
+          echo "=== proxy_manager syntax ==="
+          python3 -c "import ast; ast.parse(open('$HOME/vplink3.0/proxy_manager.py').read()); print('proxy_manager.py: OK')"
+
+          echo "=== proxy_manager commands ==="
+          cd "$HOME/vplink3.0"
+          python3 proxy_manager.py --pool
+          python3 proxy_manager.py --flush
+
+          echo "=== VPLINK_PROXY in JS ==="
+          grep -q "VPLINK_PROXY" "$HOME/vplink3.0/generated_automation.js" && echo "Proxy env var in JS: OK"
+
+          echo "=== proxy rotation in launcher ==="
+          grep -q "ROTATE_PROXY" "$HOME/vplink3.0/vplink3.0.sh" && echo "Proxy rotation in launcher: OK"
+          grep -q "proxy_manager.py" "$HOME/vplink3.0/vplink3.0.sh" && echo "proxy_manager call in launcher: OK"
+
+          echo "=== All proxy checks passed ==="
