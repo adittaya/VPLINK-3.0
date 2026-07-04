@@ -1,6 +1,6 @@
 #!/bin/bash
 # VPLink 3.0 — ad funnel automation with IP rotation + Android profiles
-# Usage: vplink3.0 [--key KEY] [--views N] [--no-proxy] [--no-yt] [--vnc] [--clean]
+# Usage: vplink3.0 [--key KEY] [--views N] [--no-proxy] [--no-yt] [--analyser] [--vnc] [--clean]
 
 # ─── Path resolution ──────────────────────────────
 # Resolve symlink to real path so SCRIPT_DIR works when installed via symlink
@@ -12,6 +12,8 @@ SCRIPT_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 AUTOMATION="$SCRIPT_DIR/generated_automation.js"
 PROXY_MGR="$SCRIPT_DIR/proxy_manager.py"
 PROXY_CLN="$SCRIPT_DIR/proxy_cleaner.py"
+PROXY_ANL="$SCRIPT_DIR/proxy_analyser.py"
+PROXY_TEST="$SCRIPT_DIR/proxy_test.js"
 PID_FILE="/tmp/vplink_pids_$$"
 VIEW_TIMEOUT=480
 SELF_PPID=$$
@@ -49,7 +51,7 @@ YT_VIDS=(
 )
 
 # ─── Parse flags ──────────────────────────────────
-ARG_KEY=""; ARG_VIEWS=""; ARG_NOPROXY=0; ARG_VNC=0; ARG_CLEAN=0; ARG_NOYT=0
+ARG_KEY=""; ARG_VIEWS=""; ARG_NOPROXY=0; ARG_VNC=0; ARG_CLEAN=0; ARG_NOYT=0; ARG_ANALYSE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --key) ARG_KEY="$2"; shift 2 ;;
@@ -58,6 +60,7 @@ while [ $# -gt 0 ]; do
     --no-yt) ARG_NOYT=1; shift ;;
     --vnc) ARG_VNC=1; shift ;;
     --clean) ARG_CLEAN=1; shift ;;
+    --analyser) ARG_ANALYSE=1; shift ;;
     *) echo "Unknown: $1"; exit 1 ;;
   esac
 done
@@ -133,7 +136,6 @@ if [ -n "$ARG_VIEWS" ]; then VIEWS="$ARG_VIEWS"
 else read -p "  Views (1-50, default 1): " VIEWS
 fi
 [[ ! "$VIEWS" =~ ^[0-9]+$ ]] || [ "$VIEWS" -lt 1 ] && VIEWS=1
-[ "$VIEWS" -gt 50 ] && VIEWS=50
 
 # ─── VNC — auto-detect existing server ────────────
 VNC_DISPLAY=""
@@ -191,7 +193,10 @@ else
     [ "$ANS" = "n" ] || [ "$ANS" = "N" ] && ROTATE=0
   fi
   if [ "$ROTATE" = 1 ]; then
-    if [ "$ARG_CLEAN" = 1 ]; then
+    if [ "$ARG_ANALYSE" = 1 ]; then
+      echo "  → Running proxy analyser (httpx + Playwright)..."
+      python3 "$PROXY_ANL" --scan --full 2>&1
+    elif [ "$ARG_CLEAN" = 1 ]; then
       echo "  → Running proxy pool cleaner..."
       python3 "$PROXY_CLN" --scan 2>&1
     elif [ -z "$ARG_KEY" ]; then
@@ -269,15 +274,27 @@ for (( i=1; i<=VIEWS; i++ )); do
   mkdir -p "$CHROME_DATA_DIR"
   export VPLINK_USER_DATA_DIR="$CHROME_DATA_DIR"
 
-  # Get proxy
+  # Get proxy with Playwright pre-flight test + retry (up to 3 tries)
   if [ "$ROTATE" = 1 ]; then
-    PROXY_LINE=$(python3 "$PROXY_MGR" --next 2>&1)
-    PROXY_URL=$(echo "$PROXY_LINE" | grep "://")
-    if [ -n "$PROXY_URL" ]; then
-      export VPLINK_PROXY="$PROXY_URL"
-      echo "  Proxy:  ${PROXY_URL#http://}"
-    else
-      echo "  Proxy:  NONE (direct)"
+    PROXY_FOUND=0
+    for proxy_try in 1 2 3 4 5; do
+      PROXY_LINE=$(python3 "$PROXY_MGR" --next 2>&1)
+      PROXY_URL=$(echo "$PROXY_LINE" | grep "://")
+      [ -z "$PROXY_URL" ] && break
+      echo -n "  Proxy:  ${PROXY_URL#http://}  → "
+      TIMING=$(timeout 25 node "$PROXY_TEST" "$PROXY_URL" 2>/dev/null)
+      if [ -n "$TIMING" ] && [ "$TIMING" -gt 0 ]; then
+        echo "${TIMING}ms ✓"
+        export VPLINK_PROXY="$PROXY_URL"
+        PROXY_FOUND=1
+        break
+      else
+        echo "dead — trying next..."
+        python3 "$PROXY_MGR" --mark-used "$PROXY_URL" 2>/dev/null || true
+      fi
+    done
+    if [ "$PROXY_FOUND" = 0 ]; then
+      echo "  Proxy:  NONE (all proxies failed — running direct)"
       unset VPLINK_PROXY
     fi
   fi

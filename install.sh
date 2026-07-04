@@ -196,6 +196,7 @@ echo ""
 echo "[6/7] Installing vplink3.0 command..."
 chmod +x "$DIR/proxy_manager.py"
 chmod +x "$DIR/proxy_cleaner.py"
+chmod +x "$DIR/proxy_analyser.py"
 chmod +x "$DIR/vplink3.0.sh"
 if [ "$TERMUX" = 1 ]; then
   cp "$DIR/vplink3.0.sh" "$PREFIX/bin/vplink3.0"
