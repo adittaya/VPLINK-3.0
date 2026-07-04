@@ -20,10 +20,10 @@ async function getKey() {
   });
 }
 
-let browser;
+let context;
 
 process.on('SIGINT', async () => {
-  if (browser) await browser.close().catch(() => {});
+  if (context) await context.close().catch(() => {});
   process.exit(130);
 });
 
@@ -33,44 +33,44 @@ process.on('SIGINT', async () => {
 
   const isTermux = process.env.VPLINK_TERMUX === '1';
 
-  // ── Launch browser ────────────────────────────────────
-  const launchOpts = { slowMo: 50 };
+  // ── Launch persistent context (isolated Chrome profile per view) ──
+  const userDataDir = process.env.VPLINK_USER_DATA_DIR || undefined;
+  const opts = { slowMo: 50 };
+
   if (isTermux) {
-    launchOpts.headless = true;
-    launchOpts.executablePath = process.env.CHROMIUM_PATH ||
+    opts.headless = true;
+    opts.executablePath = process.env.CHROMIUM_PATH ||
       '/data/data/com.termux/files/usr/bin/chromium-browser';
-    launchOpts.args = ['--no-sandbox', '--disable-gpu'];
+    opts.args = ['--no-sandbox', '--disable-gpu'];
   } else {
-    launchOpts.headless = false;
+    opts.headless = false;
   }
-  browser = await chromium.launch(launchOpts);
 
   // ── Android profile from env ──────────────────────────
-  const ctxOpts = {};
   if (process.env.VPLINK_UA) {
-    ctxOpts.userAgent = process.env.VPLINK_UA;
+    opts.userAgent = process.env.VPLINK_UA;
   }
   if (process.env.VPLINK_VP_W && process.env.VPLINK_VP_H) {
-    ctxOpts.viewport = {
+    opts.viewport = {
       width: parseInt(process.env.VPLINK_VP_W),
       height: parseInt(process.env.VPLINK_VP_H),
     };
   } else {
-    ctxOpts.viewport = { width: 1280, height: 720 };
+    opts.viewport = { width: 1280, height: 720 };
   }
   if (process.env.VPLINK_DPR) {
-    ctxOpts.deviceScaleFactor = parseFloat(process.env.VPLINK_DPR);
+    opts.deviceScaleFactor = parseFloat(process.env.VPLINK_DPR);
   }
   if (process.env.VPLINK_MOBILE === '1') {
-    ctxOpts.isMobile = true;
+    opts.isMobile = true;
   }
   if (process.env.VPLINK_TOUCH === '1') {
-    ctxOpts.hasTouch = true;
+    opts.hasTouch = true;
   }
 
   // ── Proxy ─────────────────────────────────────────────
   if (process.env.VPLINK_PROXY) {
-    ctxOpts.proxy = { server: process.env.VPLINK_PROXY };
+    opts.proxy = { server: process.env.VPLINK_PROXY };
   }
 
   // ── YouTube Referer ───────────────────────────────────
@@ -79,10 +79,10 @@ process.on('SIGINT', async () => {
     extraHeaders.Referer = process.env.VPLINK_REFERER;
   }
   if (Object.keys(extraHeaders).length > 0) {
-    ctxOpts.extraHTTPHeaders = extraHeaders;
+    opts.extraHTTPHeaders = extraHeaders;
   }
 
-  const context = await browser.newContext(ctxOpts);
+  context = await chromium.launchPersistentContext(userDataDir, opts);
   const page = await context.newPage();
 
   let destinationUrl = null;
@@ -90,10 +90,10 @@ process.on('SIGINT', async () => {
 
   async function ms(t) { await page.waitForTimeout(t); }
 
-  async function goto(url, opts = {}) {
+  async function goto(url, opts2 = {}) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        await page.goto(url, { waitUntil: 'domcontentloaded', ...opts, timeout: 45000 });
+        await page.goto(url, { waitUntil: 'domcontentloaded', ...opts2, timeout: 45000 });
         return;
       } catch (e) {
         if (attempt === 0) { console.log('  net slow, retry...'); await ms(4000); }
@@ -318,5 +318,5 @@ process.on('SIGINT', async () => {
   const outDir = process.env.VPLINK_DIR || __dirname;
   fs.writeFileSync(outDir + '/destination_url.txt', destinationUrl);
   await new Promise(r => setTimeout(r, 5000));
-  await browser.close();
+  await context.close();
 })();

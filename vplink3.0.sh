@@ -2,12 +2,19 @@
 # VPLink 3.0 — ad funnel automation with IP rotation + Android profiles
 # Usage: vplink3.0 [--key KEY] [--views N] [--no-proxy] [--no-yt] [--vnc] [--clean]
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# ─── Path resolution ──────────────────────────────
+# Resolve symlink to real path so SCRIPT_DIR works when installed via symlink
+SELF="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$SELF")" && pwd)"
+# Fallback: if files not in resolved dir, check install dir
+[ ! -f "$SCRIPT_DIR/generated_automation.js" ] && [ -f "$HOME/vplink3.0/generated_automation.js" ] && SCRIPT_DIR="$HOME/vplink3.0"
+
 AUTOMATION="$SCRIPT_DIR/generated_automation.js"
 PROXY_MGR="$SCRIPT_DIR/proxy_manager.py"
 PROXY_CLN="$SCRIPT_DIR/proxy_cleaner.py"
 PID_FILE="/tmp/vplink_pids_$$"
 VIEW_TIMEOUT=480
+SELF_PPID=$$
 
 # ─── Android Profiles ──────────────────────────────────────────────
 # 20 devices: name | userAgent | viewport_w | viewport_h | dpr | isMobile:1 | hasTouch:1
@@ -60,22 +67,49 @@ is_termux() { [ -n "$PREFIX" ] && [ -d /data/data/com.termux ] 2>/dev/null; }
 is_termux && TERMUX=1 || TERMUX=0
 
 # ─── PID tracking: only kill what we start ────────
+# We track Xvfb and x11vnc globally.
+# Chrome processes are tracked PER VIEW via user data dir path.
 track_pid() { echo "$1" >> "$PID_FILE"; }
 
 kill_own() {
   [ -f "$PID_FILE" ] || return 0
   while read -r pid; do
+    # Never kill our own shell or PIDs from other sessions
+    [ "$pid" = "$SELF_PPID" ] && continue
     kill "$pid" 2>/dev/null || true
   done < "$PID_FILE"
   rm -f "$PID_FILE"
   rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null
 }
 
+kill_chrome_by_data_dir() {
+  local data_dir="$1"
+  [ -z "$data_dir" ] && return 0
+  local chrome_pids
+  chrome_pids=$(ps aux 2>/dev/null | grep -E "[C]hromium|[C]hrome" | grep -F "$data_dir" | awk '{print $2}')
+  [ -z "$chrome_pids" ] && return 0
+  for pid in $chrome_pids; do
+    kill "$pid" 2>/dev/null || true
+    for _ in 1 2 3; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 1
+    done
+    kill -9 "$pid" 2>/dev/null || true
+  done
+}
+
 cleanup() {
   kill_own
+  # Clean Chrome user data dirs belonging to this session
+  for dir in /tmp/vplink_chrome_${$}_*; do
+    [ -d "$dir" ] || continue
+    kill_chrome_by_data_dir "$dir"
+    rm -rf "$dir" 2>/dev/null
+  done
   rm -f /tmp/vplink_our_xvfb 2>/dev/null
-  # Kill orphan node/playwright processes that share our session
-  pkill -9 -f "generated_auto.*$$" 2>/dev/null || true
+  local orphan
+  orphan=$(pgrep -P "$SELF_PPID" 2>/dev/null | grep -v "^$SELF_PPID$" || true)
+  [ -n "$orphan" ] && kill $orphan 2>/dev/null || true
 }
 trap 'echo ""; echo "  Interrupted."; cleanup; exit 130' SIGINT
 trap 'cleanup' EXIT
@@ -107,7 +141,6 @@ if [ "$TERMUX" = 0 ]; then
   VNC_ASK="$ARG_VNC"
   [ -n "$VPLINK_VNC" ] && VNC_ASK=1
   if [ "$VNC_ASK" != 1 ] && [ -z "$ARG_KEY" ]; then
-    # Detect any running VNC server
     VNC_PORT=""
     if command -v ss &>/dev/null; then
       VNC_PORT=$(ss -tlnp 2>/dev/null | grep ':590[0-5]' | head -1 | awk '{print $4}' | rev | cut -d: -f1 | rev)
@@ -133,7 +166,6 @@ fi
 YT_URL=""
 if [ "$ARG_NOYT" != 1 ]; then
   if [ -n "$ARG_KEY" ]; then
-    # Non-interactive: use random trending video
     RAND=$((RANDOM % ${#YT_VIDS[@]}))
     YT_URL="https://www.youtube.com/watch?v=${YT_VIDS[$RAND]}"
   else
@@ -188,7 +220,6 @@ export VPLINK_DIR="$SCRIPT_DIR"
 
 # ─── Start display (Linux) ───────────────────────
 if [ "$TERMUX" = 0 ]; then
-  # Kill only our old Xvfb if any
   if [ -f /tmp/vplink_our_xvfb ] && kill "$(cat /tmp/vplink_our_xvfb)" 2>/dev/null; then
     rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null
     sleep 1
@@ -205,7 +236,6 @@ if [ "$TERMUX" = 0 ]; then
   fi
   export DISPLAY=:99
   if [ -n "$VNC_DISPLAY" ]; then
-    # Don't start if already running on that port
     if ! ss -tlnp 2>/dev/null | grep -q ":${VNC_PORT} "; then
       x11vnc -display :99 -forever -shared -rfbport "$VNC_PORT" &>/dev/null &
       track_pid $!
@@ -234,6 +264,11 @@ for (( i=1; i<=VIEWS; i++ )); do
   export VPLINK_TOUCH="$P_TOUCH"
   echo "  Device: $P_NAME  (${P_VP_W}x${P_VP_H}@${P_DPR}x)"
 
+  # Unique Chrome user data dir per view — isolates cookies/cache/fingerprint
+  CHROME_DATA_DIR="/tmp/vplink_chrome_${$}_${i}"
+  mkdir -p "$CHROME_DATA_DIR"
+  export VPLINK_USER_DATA_DIR="$CHROME_DATA_DIR"
+
   # Get proxy
   if [ "$ROTATE" = 1 ]; then
     PROXY_LINE=$(python3 "$PROXY_MGR" --next 2>&1)
@@ -252,6 +287,11 @@ for (( i=1; i<=VIEWS; i++ )); do
   TS=$(date +%H:%M:%S)
   timeout $VIEW_TIMEOUT node "$AUTOMATION" "$KEY"
   EXIT_CODE=$?
+
+  # ── Per-view cleanup: kill ONLY this view's Chrome ──
+  kill_chrome_by_data_dir "$CHROME_DATA_DIR"
+  rm -rf "$CHROME_DATA_DIR" 2>/dev/null
+  unset VPLINK_USER_DATA_DIR
 
   # Mark proxy used
   if [ "$ROTATE" = 1 ] && [ -n "$VPLINK_PROXY" ]; then

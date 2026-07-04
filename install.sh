@@ -201,8 +201,7 @@ if [ "$TERMUX" = 1 ]; then
   cp "$DIR/vplink3.0.sh" "$PREFIX/bin/vplink3.0"
   chmod +x "$PREFIX/bin/vplink3.0"
 else
-  $SUDO cp "$DIR/vplink3.0.sh" /usr/local/bin/vplink3.0
-  $SUDO chmod +x /usr/local/bin/vplink3.0
+  $SUDO ln -sf "$DIR/vplink3.0.sh" /usr/local/bin/vplink3.0
 fi
 echo ""
 

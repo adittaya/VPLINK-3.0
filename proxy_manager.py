@@ -113,9 +113,6 @@ def _norm(p: dict) -> dict:
 # ─── Cache Commands ──────────────────────────────────────────────────────
 
 def cmd_sync(args):
-    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-        print("  [!] Supabase credentials not configured in proxy_manager.py")
-        sys.exit(1)
     print("  [*] Syncing from Supabase...")
     proxies = fetch_proxies_from_supabase()
     print(f"  [*] {len(proxies)} working proxies in DB")
