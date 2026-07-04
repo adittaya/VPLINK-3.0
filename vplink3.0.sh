@@ -133,7 +133,7 @@ fi
 
 # ─── Views ────────────────────────────────────────
 if [ -n "$ARG_VIEWS" ]; then VIEWS="$ARG_VIEWS"
-else read -p "  Views (1-50, default 1): " VIEWS
+else read -p "  Views (default 1): " VIEWS
 fi
 [[ ! "$VIEWS" =~ ^[0-9]+$ ]] || [ "$VIEWS" -lt 1 ] && VIEWS=1
 
