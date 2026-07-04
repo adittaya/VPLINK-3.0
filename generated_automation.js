@@ -23,7 +23,6 @@ async function getKey() {
 let browser;
 
 process.on('SIGINT', async () => {
-  console.log('\nInterrupted — closing browser...');
   if (browser) await browser.close().catch(() => {});
   process.exit(130);
 });
@@ -31,21 +30,58 @@ process.on('SIGINT', async () => {
 (async () => {
   const VPLINK_KEY = await getKey();
   if (!VPLINK_KEY) { console.error('No key provided'); process.exit(1); }
+
   const isTermux = process.env.VPLINK_TERMUX === '1';
+
+  // ── Launch browser ────────────────────────────────────
   const launchOpts = { slowMo: 50 };
   if (isTermux) {
     launchOpts.headless = true;
-    launchOpts.executablePath = process.env.CHROMIUM_PATH || '/data/data/com.termux/files/usr/bin/chromium-browser';
+    launchOpts.executablePath = process.env.CHROMIUM_PATH ||
+      '/data/data/com.termux/files/usr/bin/chromium-browser';
     launchOpts.args = ['--no-sandbox', '--disable-gpu'];
   } else {
     launchOpts.headless = false;
   }
   browser = await chromium.launch(launchOpts);
-  const ctxOpts = { viewport: { width: 1280, height: 720 } };
+
+  // ── Android profile from env ──────────────────────────
+  const ctxOpts = {};
+  if (process.env.VPLINK_UA) {
+    ctxOpts.userAgent = process.env.VPLINK_UA;
+  }
+  if (process.env.VPLINK_VP_W && process.env.VPLINK_VP_H) {
+    ctxOpts.viewport = {
+      width: parseInt(process.env.VPLINK_VP_W),
+      height: parseInt(process.env.VPLINK_VP_H),
+    };
+  } else {
+    ctxOpts.viewport = { width: 1280, height: 720 };
+  }
+  if (process.env.VPLINK_DPR) {
+    ctxOpts.deviceScaleFactor = parseFloat(process.env.VPLINK_DPR);
+  }
+  if (process.env.VPLINK_MOBILE === '1') {
+    ctxOpts.isMobile = true;
+  }
+  if (process.env.VPLINK_TOUCH === '1') {
+    ctxOpts.hasTouch = true;
+  }
+
+  // ── Proxy ─────────────────────────────────────────────
   if (process.env.VPLINK_PROXY) {
     ctxOpts.proxy = { server: process.env.VPLINK_PROXY };
-    console.log(`  Proxy: ${process.env.VPLINK_PROXY}`);
   }
+
+  // ── YouTube Referer ───────────────────────────────────
+  const extraHeaders = {};
+  if (process.env.VPLINK_REFERER) {
+    extraHeaders.Referer = process.env.VPLINK_REFERER;
+  }
+  if (Object.keys(extraHeaders).length > 0) {
+    ctxOpts.extraHTTPHeaders = extraHeaders;
+  }
+
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
 
@@ -60,7 +96,7 @@ process.on('SIGINT', async () => {
         await page.goto(url, { waitUntil: 'domcontentloaded', ...opts, timeout: 45000 });
         return;
       } catch (e) {
-        if (attempt === 0) { console.log(`  net slow, retry...`); await ms(4000); }
+        if (attempt === 0) { console.log('  net slow, retry...'); await ms(4000); }
         else throw e;
       }
     }
@@ -127,7 +163,7 @@ process.on('SIGINT', async () => {
     return false;
   }
 
-  // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════
   console.log('=== Start funnel ===');
   await goto(`https://vplink.in/${VPLINK_KEY}`);
   await ms(3000);
@@ -141,7 +177,7 @@ process.on('SIGINT', async () => {
       destinationUrl = url; break;
     }
 
-    // ── vplink.in ──────────────────────────────────────────
+    // ── vplink.in ──────────────────────────────────────
     if (url.includes('vplink')) {
       console.log('  ★ Find Get Link...');
       for (let i = 0; i < 40; i++) {
@@ -159,7 +195,7 @@ process.on('SIGINT', async () => {
       continue;
     }
 
-    // ── #startCountdownBtn (verify) ─────────────────────────
+    // ── #startCountdownBtn (verify) ─────────────────────
     if (await clickId('startCountdownBtn')) {
       console.log('  ✅ verify — wait for timer + ad...');
       let destFound = false;
@@ -171,18 +207,15 @@ process.on('SIGINT', async () => {
         }
         if (u.includes('vplink')) { destFound = true; break; }
 
-        // ~35s: timer done, rewarded ad should appear
         if (i === 35 || i === 45 || i === 55 || i === 65) {
           await page.evaluate(() => {
             document.querySelectorAll('[id*="modal"], [id*="overlay"], [class*="modal"], [class*="overlay"]').forEach(e => e.remove());
             window.scrollTo({ top: 800, behavior: 'smooth' });
           });
           await ms(500);
-          // Try various interactions
           await clickText('Continue');
           await clickText('Close');
           await clickText('Get Link');
-          // Try clicking any visible button
           await page.evaluate(() => {
             document.querySelectorAll('button, .btn, a.ce-btn, [class*="btn"]').forEach(e => {
               if (e.offsetParent !== null) e.click();
@@ -190,7 +223,6 @@ process.on('SIGINT', async () => {
           });
           await ms(1000);
 
-          // If stuck on #goog_rewarded, try learn_more.php
           if (u.includes('#goog_rewarded') || i >= 45) {
             const base = parentDirUrl();
             if (base) {
@@ -208,7 +240,7 @@ process.on('SIGINT', async () => {
       continue;
     }
 
-    // ── onlinewish ─────────────────────────────────────────
+    // ── onlinewish ─────────────────────────────────────
     if (url.includes('onlinewish')) {
       if (await clickSel('#btn7 > button.ce-btn.ce-blue')) {
         console.log('  ✅ #btn7 Continue');
@@ -230,7 +262,7 @@ process.on('SIGINT', async () => {
       continue;
     }
 
-    // ── whatsgrouphub ──────────────────────────────────────
+    // ── whatsgrouphub ──────────────────────────────────
     if (url.includes('whatsgrouphub')) {
       await scrollDown();
       await ms(500);
@@ -285,6 +317,6 @@ process.on('SIGINT', async () => {
   console.log('  ' + destinationUrl);
   const outDir = process.env.VPLINK_DIR || __dirname;
   fs.writeFileSync(outDir + '/destination_url.txt', destinationUrl);
-  await ms(5000);
+  await new Promise(r => setTimeout(r, 5000));
   await browser.close();
 })();

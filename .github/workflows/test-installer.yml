@@ -2,7 +2,7 @@ name: Test Installer
 
 on:
   push:
-    branches: [main]
+    branches: [main, proxy-rotation]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -20,7 +20,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run installer
+      - name: Inject test credentials
+        run: |
+          mkdir -p "$HOME/.vplink"
+          cat > "$HOME/.vplink/config.json" << 'EOF'
+          {
+            "supabase_url": "https://bytemjjijgwwcrxlgutf.supabase.co",
+            "supabase_service_key": "${{ secrets.SUPABASE_SERVICE_KEY }}"
+          }
+          EOF
+          chmod 600 "$HOME/.vplink/config.json"
+          echo "Test config injected"
+
+      - name: Run installer (non-interactive)
+        env:
+          SUPABASE_URL: "https://bytemjjijgwwcrxlgutf.supabase.co"
+          SUPABASE_SERVICE_KEY: "${{ secrets.SUPABASE_SERVICE_KEY }}"
         run: |
           bash install.sh
 
@@ -41,6 +56,10 @@ jobs:
 
           echo "=== x11vnc ==="
           which x11vnc
+
+          echo "=== Config file ==="
+          ls -la "$HOME/.vplink/config.json"
+          python3 -c "import json; c=json.load(open('$HOME/.vplink/config.json')); print('Config OK:', c.get('supabase_url','')[:30]+'...' if c.get('supabase_url') else 'MISSING')"
 
           echo "=== All checks passed ==="
 
@@ -86,9 +105,15 @@ jobs:
           grep -q "chromium-browser" "$HOME/vplink3.0/generated_automation.js" && echo "Chromium path in JS: OK"
 
       - name: Test proxy manager
+        env:
+          SUPABASE_URL: "https://bytemjjijgwwcrxlgutf.supabase.co"
+          SUPABASE_SERVICE_KEY: "${{ secrets.SUPABASE_SERVICE_KEY }}"
         run: |
           echo "=== proxy_manager syntax ==="
           python3 -c "import ast; ast.parse(open('$HOME/vplink3.0/proxy_manager.py').read()); print('proxy_manager.py: OK')"
+
+          echo "=== proxy_cleaner syntax ==="
+          python3 -c "import ast; ast.parse(open('$HOME/vplink3.0/proxy_cleaner.py').read()); print('proxy_cleaner.py: OK')"
 
           echo "=== proxy_manager commands ==="
           cd "$HOME/vplink3.0"
@@ -99,7 +124,24 @@ jobs:
           grep -q "VPLINK_PROXY" "$HOME/vplink3.0/generated_automation.js" && echo "Proxy env var in JS: OK"
 
           echo "=== proxy rotation in launcher ==="
-          grep -q "ROTATE_PROXY" "$HOME/vplink3.0/vplink3.0.sh" && echo "Proxy rotation in launcher: OK"
+          grep -q "ROTATE=" "$HOME/vplink3.0/vplink3.0.sh" && echo "Proxy rotation in launcher: OK"
           grep -q "proxy_manager.py" "$HOME/vplink3.0/vplink3.0.sh" && echo "proxy_manager call in launcher: OK"
+
+          echo "=== Android profiles in launcher ==="
+          grep -q "VPLINK_UA" "$HOME/vplink3.0/vplink3.0.sh" && echo "Android profile UA env: OK"
+          grep -q "VPLINK_VP_W" "$HOME/vplink3.0/vplink3.0.sh" && echo "Android profile viewport: OK"
+
+          echo "=== Android profiles in JS ==="
+          grep -q "VPLINK_UA" "$HOME/vplink3.0/generated_automation.js" && echo "Android profile UA in JS: OK"
+          grep -q "deviceScaleFactor" "$HOME/vplink3.0/generated_automation.js" && echo "deviceScaleFactor in JS: OK"
+
+          echo "=== YouTube referrer ==="
+          grep -q "VPLINK_REFERER" "$HOME/vplink3.0/vplink3.0.sh" && echo "YouTube referrer in launcher: OK"
+          grep -q "VPLINK_REFERER" "$HOME/vplink3.0/generated_automation.js" && echo "YouTube referrer in JS: OK"
+          grep -q "extraHTTPHeaders" "$HOME/vplink3.0/generated_automation.js" && echo "extraHTTPHeaders in JS: OK"
+
+          echo "=== PID tracking ==="
+          grep -q "PID_FILE" "$HOME/vplink3.0/vplink3.0.sh" && echo "PID tracking in launcher: OK"
+          grep -q "kill_own" "$HOME/vplink3.0/vplink3.0.sh" && echo "kill_own function: OK"
 
           echo "=== All proxy checks passed ==="
