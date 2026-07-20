@@ -323,14 +323,12 @@ mkdir -p "$RESULTS_DIR"
 deep_cleanup
 
 # ════════════════════════════════════════════════════════
-#  SESSION-BASED PROXY ROTATION
-#  One proxy per session. Session rotates after SESSION_SIZE SUCCESSFUL views.
-#  On failure, proxy is invalidated immediately (fail-fast for bad IPs).
+#  PER-VIEW PROXY ROTATION
+#  New proxy for every view. On failure, IP is invalidated immediately.
 # ════════════════════════════════════════════════════════
-SESSION_SIZE=5           # successful views per proxy session
-SESSION_BREAK_MIN=5     # minutes between sessions
-SUCCESSFUL_IN_SESSION=0  # views that completed successfully with current proxy
-TOTAL_IN_SESSION=0       # total attempts with current proxy (safety limit)
+SESSION_SIZE=1           # rotate after each successful view
+SUCCESSFUL_IN_SESSION=0  # views completed with current proxy
+TOTAL_IN_SESSION=0       # total attempts with current proxy
 CURRENT_PROXY=""
 
 for (( i=1; i<=VIEWS; i++ )); do
@@ -362,19 +360,14 @@ for (( i=1; i<=VIEWS; i++ )); do
     fi
   fi
 
-  # ── Proxy (session-based: one IP for SESSION_SIZE SUCCESSFUL views) ──
+  # ── Proxy (rotate after each view) ──
   unset VPLINK_PROXY
   if [ "$PROXY_ENABLED" = "true" ]; then
     # Rotate on: (a) session completed SESSION_SIZE successes, or (b) safety limit reached
     if [ -z "$CURRENT_PROXY" ] || [ "$SUCCESSFUL_IN_SESSION" -ge "$SESSION_SIZE" ] || [ "$TOTAL_IN_SESSION" -ge $((SESSION_SIZE * 2)) ]; then
-      if [ -n "$CURRENT_PROXY" ]; then
-        info "Session ended ($SUCCESSFUL_IN_SESSION successful / $TOTAL_IN_SESSION total). Waiting ${SESSION_BREAK_MIN}min break..."
-        SESSION_BREAK=$(( SESSION_BREAK_MIN * 60 + RANDOM % 300 ))
-        sleep "$SESSION_BREAK"
-      fi
       SUCCESSFUL_IN_SESSION=0
       TOTAL_IN_SESSION=0
-      info "Testing all proxies (clean + speed)..."
+      info "Rotating proxy..."
       PROXY_RESULT=$(run_with_timeout 300 $PYTHON_BIN "$PROXY_ROTATOR" "$PROXY_TIER" | tail -1) || true
       if [ -n "$PROXY_RESULT" ]; then
         CURRENT_PROXY="$PROXY_RESULT"
@@ -384,8 +377,7 @@ for (( i=1; i<=VIEWS; i++ )); do
         CURRENT_PROXY=""
       fi
     else
-      remaining=$((SESSION_SIZE - SUCCESSFUL_IN_SESSION))
-      info "Reusing session proxy (${remaining} successes left): http://${CURRENT_PROXY}"
+      info "Rotating proxy for next view..."
     fi
     if [ -n "$CURRENT_PROXY" ]; then
       export VPLINK_PROXY="http://${CURRENT_PROXY}"
