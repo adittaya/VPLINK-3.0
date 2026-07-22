@@ -499,6 +499,7 @@ DEST_PATTERNS = [
     "12indiaplay.com", "vv53243", "casino", "one-vv",
     "apkmirror.com", "play.google.com", "download", ".apk",
     "capecutapk.com", "amazingbaba.com", "ti.com", "1xbet", "whotop.cc",
+    "darkguruji.com", "srtak.com", "studyscholorships", "universitiesstudy",
 ]
 
 AD_DOMAINS = ["golaso.org", "doubleclick.net", "googlesyndication.com", "googleadservices.com"]
@@ -1287,18 +1288,6 @@ def do_get_link():
         except Exception:
             return False
 
-        link_hrefs = safe_eval("""
-            var getLink = document.getElementById('get-link');
-            var gtLink = document.getElementById('gt-link');
-            return {{
-                getLinkHref: getLink ? getLink.href : '',
-                gtLinkHref: gtLink ? gtLink.href : ''
-            }};
-        """) or {}
-        link_href = (link_hrefs.get("gtLinkHref") or link_hrefs.get("getLinkHref") or "").replace("javascript:void(0)", "")
-        if link_href and link_href.startswith("http"):
-            log(f"captured href before click: gt-link={bool(link_hrefs.get('gtLinkHref'))}, get-link={bool(link_hrefs.get('getLinkHref'))}")
-
         t0 = time.time()
         try:
             WebDriverWait(driver, int(adpt_poll.get())).until(
@@ -1312,6 +1301,18 @@ def do_get_link():
         countdown_elapsed = int((time.time() - t0) * 1000)
         if countdown_elapsed > 500:
             log(f"get-link countdown: {countdown_elapsed}ms")
+
+        link_hrefs = safe_eval("""
+            var getLink = document.getElementById('get-link');
+            var gtLink = document.getElementById('gt-link');
+            return {{
+                getLinkHref: getLink ? getLink.href : '',
+                gtLinkHref: gtLink ? gtLink.href : ''
+            }};
+        """) or {}
+        link_href = (link_hrefs.get("gtLinkHref") or link_hrefs.get("getLinkHref") or "").replace("javascript:void(0)", "")
+        if link_href and link_href.startswith("http"):
+            log(f"captured href after countdown: {link_href[:100]}")
 
         human_delay(800, 2000)
         human_mouse_move("#get-link")
@@ -1354,6 +1355,7 @@ def do_get_link():
                 pass
 
         click_time = time.time()
+        tracking_wait = int(adpt_getlink.get() * 500)
         stable_url = ""
         stable_count = 0
 
@@ -1387,15 +1389,31 @@ def do_get_link():
                                     popup_url = new_url
                                     if not any(x in popup_url for x in [
                                         "wistfulseverely.com", "one-vv", "linkedin.com/redir",
-                                        "google.com/url", "facebook.com/l.php", "t.co/", "amazingbaba.com"
+                                        "google.com/url", "facebook.com/l.php", "t.co/", "amazingbaba.com",
+                                        "lnkd.in"
                                     ]):
+                                        break
+                                    if ("lnkd.in" in popup_url or "linkedin.com" in popup_url) and r >= 10:
+                                        log(f"stuck on LinkedIn redirect for {r}s, trying HTTP resolve...")
+                                        try:
+                                            import urllib.request as _urllib_req
+                                            req = _urllib_req.Request(popup_url, headers={
+                                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                                            })
+                                            resp = _urllib_req.urlopen(req, timeout=15)
+                                            final_url = resp.geturl()
+                                            if final_url and final_url != popup_url and "lnkd.in" not in final_url and "linkedin.com" not in final_url:
+                                                log(f"resolved via HTTP: {final_url[:100]}")
+                                                destination_url = final_url
+                                                return True
+                                        except Exception:
+                                            pass
                                         break
                             except Exception:
                                 break
                     destination_url = popup_url
                     log(f"destination (popup): {popup_url[:100]}")
                     elapsed_ms = (time.time() - click_time) * 1000
-                    tracking_wait = int(adpt_getlink.get() * 500)
                     wait = max(0, tracking_wait - elapsed_ms) / 1000
                     if wait > 0.5:
                         log(f"tracking wait: {int(wait * 1000)}ms")
