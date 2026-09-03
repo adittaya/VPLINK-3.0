@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const KEY = process.argv[2] || 'UbpV2D';
+const KEY = process.argv[2] || process.env.FLOW_KEY || 'example';
 const DIR = path.join(__dirname, 'recordings', 'discovery_' + Date.now());
 const SHOTS = path.join(DIR, 'screenshots');
 const DOMS = path.join(DIR, 'dom');

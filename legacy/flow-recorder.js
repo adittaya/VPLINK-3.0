@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const URL_ARG = process.argv[2] || 'https://vplink.in/gbd1b';
+const URL_ARG = process.argv[2] || process.env.TARGET_URL || 'https://example.com';
 const RECORDING_DIR = path.join(__dirname, 'recordings', 'recording_' + new Date().toISOString().replace(/[:.]/g, '-'));
 const SCREENSHOTS_DIR = path.join(RECORDING_DIR, 'screenshots');
 const SNAPSHOTS_DIR = path.join(RECORDING_DIR, 'snapshots');

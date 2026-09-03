@@ -4,12 +4,12 @@
 const fs = require('fs');
 const path = require('path');
 
-const API_KEY = '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';
-const API_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+const API_KEY = process.env.NVIDIA_API_KEY || '';
+const API_URL = process.env.NVIDIA_API_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
 const MODEL = 'meta/llama-3.2-11b-vision-instruct';
 
-const SCREENSHOTS_DIR = path.join(__dirname, 'recordings/recording_2026-07-18T15-20-49-123Z/screenshots');
-const OUTPUT = path.join(__dirname, 'recordings/analysis/results.jsonl');
+const SCREENSHOTS_DIR = process.env.SCREENSHOTS_DIR || path.join(__dirname, 'recordings/latest/screenshots');
+const OUTPUT = process.env.ANALYSIS_OUTPUT || path.join(__dirname, 'recordings/analysis/results.jsonl');
 const SUMMARY = path.join(__dirname, 'recordings/analysis/summary.json');
 
 const PROMPT = `Analyze this browser screenshot for a vplink.in URL shortener automation. Return ONLY valid JSON (no markdown):

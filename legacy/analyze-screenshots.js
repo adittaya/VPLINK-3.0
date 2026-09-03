@@ -5,8 +5,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const API_KEY = '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';
-const API_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+const API_KEY = process.env.NVIDIA_API_KEY || '';
+const API_URL = process.env.NVIDIA_API_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
 
 // Models to use (different perspectives)
 const MODELS = [
@@ -15,7 +15,7 @@ const MODELS = [
   'nvidia/llama-3.1-nemotron-nano-vl-8b-v1'
 ];
 
-const SCREENSHOTS_DIR = path.join(__dirname, 'recordings/recording_2026-07-18T15-20-49-123Z/screenshots');
+const SCREENSHOTS_DIR = process.env.SCREENSHOTS_DIR || path.join(__dirname, 'recordings/latest/screenshots');
 const OUTPUT_DIR = path.join(__dirname, 'recordings/analysis');
 
 const PROMPT = `You are analyzing a screenshot of an automated browser navigating through vplink.in URL shortener funnel.

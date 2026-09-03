@@ -61,8 +61,8 @@ def _detect_chrome_binary() -> str:
     return "/usr/bin/chromium-browser"
 
 SUPABASE_REST = "/rest/v1"
-TEST_KEY = "gbd1b"
-TEST_URL = f"https://vplink.in/{TEST_KEY}"
+TEST_KEY = os.environ.get("PROXY_TEST_KEY", "example")
+TEST_URL = os.environ.get("PROXY_CHECK_URL", os.environ.get("TARGET_URL", "https://example.com"))
 
 
 def supabase_fetch(endpoint, method="GET", timeout=25):
@@ -139,7 +139,8 @@ def _try_connect_quick(proxy, host, path, timeout_ms):
 
 
 def test_proxy_quick(proxy, timeout_ms=3000):
-    r = _try_connect_quick(proxy, "vplink.in", f"/{TEST_KEY}", timeout_ms)
+    check_host = urlparse(TEST_URL).hostname or "example.com"
+    r = _try_connect_quick(proxy, check_host, urlparse(TEST_URL).path or "/", timeout_ms)
     if r["ok"]:
         return r
     start = time.time()
@@ -554,7 +555,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
         # 2. Supabase URL
-        default_url = "https://bytemjjijgwwcrxlgutf.supabase.co"
+        default_url = os.environ.get("SUPABASE_URL", "")
         current_url = cfg.get("supabase_url") or default_url
         ans = input(f"Supabase URL [{current_url}]: ").strip()
         sb_url = ans or current_url

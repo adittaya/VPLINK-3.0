@@ -1,6 +1,18 @@
 {
-  "name": "vplink3.0",
+  "name": "browser-automation-template",
+  "version": "1.0.0",
   "private": true,
-  "description": "Automated vplink.in URL funnel (Python/Selenium)",
-  "python": ">=3.8"
+  "description": "Generic browser-automation template (Python/Selenium default, Playwright JS optional) with optional proxy support",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "example": "node examples/basic.js",
+    "example:proxy": "node examples/basic.js",
+    "test": "node --check examples/basic.js && echo 'JS syntax OK (run pytest for Python tests)'"
+  },
+  "dependencies": {
+    "playwright": "^1.61.1",
+    "playwright-core": "^1.61.1"
+  }
 }

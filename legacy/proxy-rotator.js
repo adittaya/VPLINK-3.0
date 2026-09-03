@@ -5,8 +5,8 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 const SUPABASE_REST = '/rest/v1';
-const TEST_KEY = 'gbd1b';
-const TEST_URL = `https://vplink.in/${TEST_KEY}`;
+const TEST_KEY = process.env.PROXY_TEST_KEY || 'example';
+const TEST_URL = process.env.PROXY_CHECK_URL || process.env.TARGET_URL || 'https://example.com';
 
 function supabaseFetch(endpoint, options = {}) {
   const cfg = config.load();
@@ -104,9 +104,10 @@ function tryHttpQuick(proxy, host, path, timeoutMs) {
 
 async function testProxyQuick(proxy, timeoutMs = 3000) {
   const start = Date.now();
-  const r = await tryConnectQuick(proxy, 'vplink.in', '/gbd1b', timeoutMs);
+  const u = new URL(TEST_URL);
+  const r = await tryConnectQuick(proxy, u.hostname, u.pathname || '/', timeoutMs);
   if (r) return { ok: true, latency_ms: Date.now() - start };
-  const h = await tryHttpQuick(proxy, 'vplink.in', '/gbd1b', timeoutMs);
+  const h = await tryHttpQuick(proxy, u.hostname, u.pathname || '/', timeoutMs);
   if (h) return { ok: true, latency_ms: Date.now() - start };
   return { ok: false, latency_ms: Date.now() - start };
 }
@@ -534,7 +535,7 @@ async function proxySetupWizard() {
   }
 
   // ── Step 2: Supabase URL ──
-  const defaultUrl = cfg.supabase_url || 'https://bytemjjijgwwcrxlgutf.supabase.co';
+  const defaultUrl = cfg.supabase_url || process.env.SUPABASE_URL || '';
   const urlDisplay = defaultUrl.length > 40 ? defaultUrl.slice(0, 40) + '...' : defaultUrl;
   const url = await ask(`  Supabase URL [${urlDisplay}]: `);
   const supabaseUrl = url || defaultUrl;

@@ -689,7 +689,7 @@ setup_credentials() {
   if [ -n "${VPLINK_NONINTERACTIVE:-}" ] || [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
     # But check for env-var credentials first
     if [ -n "${SUPABASE_KEY:-}" ] && [ -n "${SUPABASE_SECRET:-}" ]; then
-      SB_URL="${SUPABASE_URL:-https://bytemjjijgwwcrxlgutf.supabase.co}"
+      SB_URL="${SUPABASE_URL:-}"
       SB_KEY="$SUPABASE_KEY"
       SB_SECRET="$SUPABASE_SECRET"
       mkdir -p "$CONFIG_DIR"
@@ -708,7 +708,7 @@ setup_credentials() {
   if [ ! -t 0 ]; then
     # But check for env-var credentials first
     if [ -n "${SUPABASE_KEY:-}" ] && [ -n "${SUPABASE_SECRET:-}" ]; then
-      SB_URL="${SUPABASE_URL:-https://bytemjjijgwwcrxlgutf.supabase.co}"
+      SB_URL="${SUPABASE_URL:-}"
       SB_KEY="$SUPABASE_KEY"
       SB_SECRET="$SUPABASE_SECRET"
       mkdir -p "$CONFIG_DIR"
@@ -735,8 +735,8 @@ setup_credentials() {
   echo "╚══════════════════════════════════════════════════════════╝"
   echo ""
 
-  read -r -p "  Supabase URL [https://bytemjjijgwwcrxlgutf.supabase.co]: " SB_URL
-  SB_URL="${SB_URL:-https://bytemjjijgwwcrxlgutf.supabase.co}"
+  read -r -p "  Supabase URL [${SUPABASE_URL:-}]: " SB_URL
+  SB_URL="${SB_URL:-${SUPABASE_URL:-}}"
 
   read -r -p "  Supabase Anon/Publishable Key: " SB_KEY
   read -r -s -p "  Supabase Secret/Service Key (hidden): " SB_SECRET

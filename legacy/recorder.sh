@@ -10,7 +10,7 @@ mkdir -p "$SCREENSHOTS_DIR" "$SNAPSHOTS_DIR"
 
 VNC_PORT="${1:-5900}"
 DISPLAY_NUM="${2:-99}"
-KEY="${3:-UbpV2D}"
+KEY="${3:-${FLOW_KEY:-example}}"
 
 cleanup() {
   echo ""

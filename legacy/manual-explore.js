@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const KEY = process.argv[2] || 'UbpV2D';
+const KEY = process.argv[2] || process.env.FLOW_KEY || 'example';
 const OUT = path.join(__dirname, 'recordings', `manual_${Date.now()}`);
 fs.mkdirSync(path.join(OUT, 'dom'), { recursive: true });
 fs.mkdirSync(path.join(OUT, 'screenshots'), { recursive: true });
